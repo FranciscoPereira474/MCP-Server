@@ -1,6 +1,12 @@
+import os
+from dotenv import load_dotenv
 from sqlmodel import Session, SQLModel, create_engine
 
-DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/mcp_is_project"
+load_dotenv()
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("A variável de ambiente DATABASE_URL não está definida. Por favor, configura-a no ficheiro .env")
 
 engine = create_engine(DATABASE_URL, echo=True)
 

@@ -1,0 +1,56 @@
+INTERNAL REPORT - MCP-IS-PROJECT
+=================================
+
+Project: MCP-IS-PROJECT
+Version: 0.1.0
+Date: 2026-03-21
+
+1. SYSTEM OVERVIEW
+-------------------
+This project implements a simple item management service exposed through two interfaces:
+- REST API (FastAPI) on port 8000
+- MCP Server (FastMCP) for AI agent interaction
+
+Both interfaces share the same core business logic (services.py), ensuring consistency.
+
+2. AVAILABLE REST ENDPOINTS
+----------------------------
+- GET    /              -> Hello world greeting
+- POST   /items         -> Create a new item
+- GET    /items          -> List all items (with pagination)
+- GET    /items/{id}     -> Get item by ID
+- PATCH  /items/{id}     -> Partially update an item
+- DELETE /items/{id}     -> Delete an item
+
+3. AVAILABLE MCP TOOLS
+-----------------------
+- hello           -> Greet someone
+- add_item        -> Create a new item
+- list_all_items  -> List all items
+- read_item       -> Get item details by ID
+- modify_item     -> Update an existing item
+- remove_item     -> Delete an item by ID
+
+4. AVAILABLE MCP RESOURCES
+---------------------------
+- resource://db-model         -> Database model documentation
+- resource://internal-report  -> This report
+
+5. TECHNOLOGY STACK
+--------------------
+- Python 3.12+
+- FastAPI (REST framework)
+- SQLModel (ORM)
+- PostgreSQL (Database)
+- FastMCP (MCP server framework)
+- Uvicorn (ASGI server)
+
+6. ARCHITECTURE
+----------------
+The system follows a layered architecture:
+
+    REST (main.py)  ──┐
+                      ├──> Core Logic (services.py) ──> Database (database.py)
+    MCP (mcp_server.py)┘
+
+Core functions are defined once in services.py and reused by both interfaces.

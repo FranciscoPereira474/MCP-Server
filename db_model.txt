@@ -1,0 +1,23 @@
+DATABASE MODEL - MCP-IS-PROJECT
+================================
+
+Database Engine: PostgreSQL
+ORM: SQLModel (SQLAlchemy + Pydantic)
+
+TABLE: item
+-----------
+| Column      | Type         | Constraints                  |
+|-------------|--------------|------------------------------|
+| id          | INTEGER      | PRIMARY KEY, AUTO INCREMENT  |
+| name        | VARCHAR      | NOT NULL, INDEXED            |
+| description | VARCHAR      | NULLABLE                     |
+| price       | FLOAT        | NOT NULL, >= 0               |
+| quantity    | INTEGER      | NOT NULL, DEFAULT 0, >= 0    |
+
+RELATIONSHIPS:
+- No foreign keys at this stage. The item table is a standalone entity.
+
+NOTES:
+- The table is auto-created on server startup via SQLModel.metadata.create_all().
+- The database URL is configured through the DATABASE_URL environment variable.
+- Validation (price >= 0, quantity >= 0) is enforced at the application level via Pydantic/SQLModel Field constraints.

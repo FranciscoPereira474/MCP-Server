@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from mcp.server.fastmcp import FastMCP
 from sqlmodel import Session
 
@@ -79,6 +81,39 @@ def remove_item(item_id: int) -> str:
         if delete_item(session, item_id):
             return f"Item {item_id} deleted."
         return f"Item {item_id} not found."
+
+
+BASE_DIR = Path(__file__).parent
+
+
+@mcp.resource("resource://db-model")
+def get_db_model() -> str:
+    """Returns the database model documentation describing all tables and columns."""
+    return (BASE_DIR / "db_model.txt").read_text(encoding="utf-8")
+
+
+@mcp.resource("resource://internal-report")
+def get_internal_report() -> str:
+    """Returns an internal report with system overview, endpoints, and architecture."""
+    return (BASE_DIR / "internal_report.txt").read_text(encoding="utf-8")
+
+
+@mcp.prompt()
+def inventory_report(sort_by: str = "name") -> str:
+    """Generate an inventory report sorted by a given criterion (name, price, or quantity)."""
+    return (
+        f"Use the 'list_all_items' tool to retrieve every item in the database. "
+        f"Then organize the results into a well-formatted inventory report sorted by {sort_by}. "
+        f"The report should include:\n"
+        f"1. A header with the report title and the current date.\n"
+        f"2. A table or list of all items showing: ID, Name, Description, Price, and Quantity.\n"
+        f"3. A summary section at the end with:\n"
+        f"   - Total number of items\n"
+        f"   - Total inventory value (sum of price * quantity for each item)\n"
+        f"   - Item with the highest price\n"
+        f"   - Item with the lowest stock (quantity)\n"
+        f"Sort all items by '{sort_by}' in ascending order."
+    )
 
 
 if __name__ == "__main__":
