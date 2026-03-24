@@ -4,6 +4,15 @@ DATABASE MODEL - MCP-IS-PROJECT
 Database Engine: PostgreSQL
 ORM: SQLModel (SQLAlchemy + Pydantic)
 
+TABLE: supplier
+----------------
+| Column      | Type         | Constraints                  |
+|-------------|--------------|------------------------------|
+| id          | INTEGER      | PRIMARY KEY, AUTO INCREMENT  |
+| name        | VARCHAR      | NOT NULL, INDEXED            |
+| contact     | VARCHAR      | NULLABLE                     |
+| email       | VARCHAR      | NULLABLE                     |
+
 TABLE: item
 -----------
 | Column      | Type         | Constraints                  |
@@ -13,11 +22,14 @@ TABLE: item
 | description | VARCHAR      | NULLABLE                     |
 | price       | FLOAT        | NOT NULL, >= 0               |
 | quantity    | INTEGER      | NOT NULL, DEFAULT 0, >= 0    |
+| supplier_id | INTEGER      | NULLABLE, FOREIGN KEY -> supplier.id |
 
 RELATIONSHIPS:
-- No foreign keys at this stage. The item table is a standalone entity.
+- supplier (1) ---> (N) item: One supplier can provide many items.
+- Each item optionally belongs to one supplier via supplier_id.
 
 NOTES:
-- The table is auto-created on server startup via SQLModel.metadata.create_all().
+- Tables are auto-created on server startup via SQLModel.metadata.create_all().
 - The database URL is configured through the DATABASE_URL environment variable.
 - Validation (price >= 0, quantity >= 0) is enforced at the application level via Pydantic/SQLModel Field constraints.
+- Deleting a supplier that still has items linked is prevented by the remove_supplier_safe tool (returns error).

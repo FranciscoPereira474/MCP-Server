@@ -4,14 +4,19 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlmodel import Session
 
 from database import create_db_and_tables, get_session
-from models import Item, ItemCreate, ItemUpdate
+from models import Item, ItemCreate, ItemUpdate, Supplier, SupplierCreate, SupplierUpdate
 from services import (
     create_item,
+    create_supplier,
     delete_item,
+    delete_supplier,
     get_item,
     get_items,
+    get_supplier,
+    get_suppliers,
     say_hello,
     update_item,
+    update_supplier,
 )
 
 
@@ -65,6 +70,47 @@ def update_item_endpoint(
 def delete_item_endpoint(item_id: int, session: Session = Depends(get_session)):
     if not delete_item(session, item_id):
         raise HTTPException(status_code=404, detail="Item not found")
+
+
+# ── Supplier endpoints ───────────────────────────────────────────────
+
+
+@app.post("/suppliers", response_model=Supplier, status_code=201)
+def create_supplier_endpoint(
+    supplier: SupplierCreate, session: Session = Depends(get_session)
+):
+    return create_supplier(session, supplier)
+
+
+@app.get("/suppliers", response_model=list[Supplier])
+def list_suppliers(
+    offset: int = 0, limit: int = 100, session: Session = Depends(get_session)
+):
+    return get_suppliers(session, offset=offset, limit=limit)
+
+
+@app.get("/suppliers/{supplier_id}", response_model=Supplier)
+def read_supplier(supplier_id: int, session: Session = Depends(get_session)):
+    supplier = get_supplier(session, supplier_id)
+    if supplier is None:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    return supplier
+
+
+@app.patch("/suppliers/{supplier_id}", response_model=Supplier)
+def update_supplier_endpoint(
+    supplier_id: int, supplier: SupplierUpdate, session: Session = Depends(get_session)
+):
+    updated = update_supplier(session, supplier_id, supplier)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    return updated
+
+
+@app.delete("/suppliers/{supplier_id}", status_code=204)
+def delete_supplier_endpoint(supplier_id: int, session: Session = Depends(get_session)):
+    if not delete_supplier(session, supplier_id):
+        raise HTTPException(status_code=404, detail="Supplier not found")
 
 
 if __name__ == "__main__":

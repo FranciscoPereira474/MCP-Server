@@ -2,12 +2,13 @@ INTERNAL REPORT - MCP-IS-PROJECT
 =================================
 
 Project: MCP-IS-PROJECT
-Version: 0.1.0
-Date: 2026-03-21
+Version: 0.2.0
+Date: 2026-03-23
 
 1. SYSTEM OVERVIEW
 -------------------
-This project implements a simple item management service exposed through two interfaces:
+This project implements an inventory management service with two entities (Item and Supplier)
+exposed through two interfaces:
 - REST API (FastAPI) on port 8000
 - MCP Server (FastMCP) for AI agent interaction
 
@@ -15,6 +16,7 @@ Both interfaces share the same core business logic (services.py), ensuring consi
 
 2. AVAILABLE REST ENDPOINTS
 ----------------------------
+Item endpoints:
 - GET    /              -> Hello world greeting
 - POST   /items         -> Create a new item
 - GET    /items          -> List all items (with pagination)
@@ -22,21 +24,45 @@ Both interfaces share the same core business logic (services.py), ensuring consi
 - PATCH  /items/{id}     -> Partially update an item
 - DELETE /items/{id}     -> Delete an item
 
+Supplier endpoints:
+- POST   /suppliers             -> Create a new supplier
+- GET    /suppliers              -> List all suppliers (with pagination)
+- GET    /suppliers/{id}         -> Get supplier by ID
+- PATCH  /suppliers/{id}         -> Partially update a supplier
+- DELETE /suppliers/{id}         -> Delete a supplier
+
 3. AVAILABLE MCP TOOLS
 -----------------------
-- hello           -> Greet someone
-- add_item        -> Create a new item
-- list_all_items  -> List all items
-- read_item       -> Get item details by ID
-- modify_item     -> Update an existing item
-- remove_item     -> Delete an item by ID
+CRUD - Item:
+- hello              -> Greet someone
+- add_item           -> Create a new item (typed inputs: price as float, quantity as int)
+- add_item_text      -> Create a new item (text inputs: all parameters as strings)
+- list_all_items     -> List all items
+- read_item          -> Get item details by ID
+- modify_item        -> Update an existing item
+- remove_item        -> Delete an item by ID
+
+CRUD - Supplier:
+- add_supplier       -> Create a new supplier
+- list_all_suppliers -> List all suppliers
+- read_supplier_tool -> Get supplier details by ID
+- modify_supplier    -> Update an existing supplier
+- remove_supplier    -> Delete a supplier by ID
+
+Special tools:
+- transfer_stock        -> Transfer stock between items (raises exception if insufficient stock)
+- remove_supplier_safe  -> Delete supplier only if no items are linked (returns error otherwise)
 
 4. AVAILABLE MCP RESOURCES
 ---------------------------
-- resource://db-model         -> Database model documentation
+- resource://db-model         -> Database model documentation (tables, columns, relationships)
 - resource://internal-report  -> This report
 
-5. TECHNOLOGY STACK
+5. AVAILABLE MCP PROMPTS
+-------------------------
+- inventory_report  -> Generate a formatted inventory report sorted by name, price, or quantity
+
+6. TECHNOLOGY STACK
 --------------------
 - Python 3.12+
 - FastAPI (REST framework)
@@ -45,7 +71,7 @@ Both interfaces share the same core business logic (services.py), ensuring consi
 - FastMCP (MCP server framework)
 - Uvicorn (ASGI server)
 
-6. ARCHITECTURE
+7. ARCHITECTURE
 ----------------
 The system follows a layered architecture:
 
@@ -54,3 +80,8 @@ The system follows a layered architecture:
     MCP (mcp_server.py)┘
 
 Core functions are defined once in services.py and reused by both interfaces.
+
+8. ENTITIES AND RELATIONSHIPS
+------------------------------
+- Supplier (1) ──> (N) Item
+- A supplier can provide many items; each item optionally belongs to one supplier.

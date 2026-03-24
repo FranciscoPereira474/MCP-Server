@@ -273,6 +273,91 @@ def inventory_report(sort_by: str = "name") -> str:
 
 ---
 
+## Fase 1 (Avaliação) - Adicionar 2ª entidade: Supplier
+
+### O que foi feito
+Foi adicionada a entidade `Supplier` (Fornecedor) com relação 1:N com `Item` — um Supplier fornece vários Items, cada Item pode pertencer a um Supplier. CRUD completo exposto via REST e MCP, com core functions partilhadas.
+
+### Modelo Supplier
+
+**`models.py`** — Novos modelos:
+```python
+class SupplierBase(SQLModel):
+    name: str = Field(index=True)
+    contact: str | None = None
+    email: str | None = None
+
+class Supplier(SupplierBase, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    items: list["Item"] = Relationship(back_populates="supplier")
+```
+
+**Relação com Item** — `Item` ganhou:
+```python
+supplier_id: int | None = Field(default=None, foreign_key="supplier.id")
+supplier: Supplier | None = Relationship(back_populates="items")
+```
+
+### Core functions (services.py)
+
+| Função               | Descrição                      |
+|----------------------|--------------------------------|
+| `create_supplier()`  | Criar supplier na BD           |
+| `get_supplier()`     | Buscar supplier por ID         |
+| `get_suppliers()`    | Listar suppliers com paginação |
+| `update_supplier()`  | Atualização parcial            |
+| `delete_supplier()`  | Apagar supplier                |
+
+### Endpoints REST (main.py)
+
+| Método | Rota                       | Descrição                 | Status Code |
+|--------|----------------------------|---------------------------|-------------|
+| POST   | `/suppliers`               | Criar supplier            | 201         |
+| GET    | `/suppliers`               | Listar suppliers          | 200         |
+| GET    | `/suppliers/{supplier_id}` | Obter supplier por ID     | 200         |
+| PATCH  | `/suppliers/{supplier_id}` | Atualizar supplier parcial| 200         |
+| DELETE | `/suppliers/{supplier_id}` | Apagar supplier           | 204         |
+
+### MCP Tools (mcp_server.py)
+
+| Tool MCP             | Função core chamada    | Descrição              |
+|----------------------|------------------------|------------------------|
+| `add_supplier`       | `create_supplier()`    | Criar supplier         |
+| `list_all_suppliers` | `get_suppliers()`      | Listar suppliers       |
+| `read_supplier_tool` | `get_supplier()`       | Obter supplier por ID  |
+| `modify_supplier`    | `update_supplier()`    | Atualizar supplier     |
+| `remove_supplier`    | `delete_supplier()`    | Apagar supplier        |
+
+### Arquitetura atualizada
+```
+┌─────────┐     ┌──────────────┐     ┌──────────┐
+│  REST   │────>│   Core       │<────│   MCP    │
+│ (FastAPI)│     │ (services.py)│     │ (FastMCP)│
+└─────────┘     └──────┬───────┘     └──────────┘
+                       │
+                ┌──────▼───────┐
+                │  Database    │
+                │ (PostgreSQL) │
+                │              │
+                │ ┌──────────┐ │
+                │ │ supplier │ │
+                │ └────┬─────┘ │
+                │      │ 1:N   │
+                │ ┌────▼─────┐ │
+                │ │   item   │ │
+                │ └──────────┘ │
+                └──────────────┘
+```
+
+### Nota sobre migração
+Como a tabela `item` já existia, é necessário adicionar a coluna `supplier_id` manualmente:
+```sql
+ALTER TABLE item ADD COLUMN supplier_id INTEGER REFERENCES supplier(id);
+```
+Ou alternativamente, apagar as tabelas e deixar o sistema recriá-las automaticamente.
+
+---
+
 ## Como executar
 
 ### Servidor REST (FastAPI)

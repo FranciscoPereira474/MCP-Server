@@ -12,7 +12,7 @@ engine = create_engine(DATABASE_URL, echo=True)
 
 
 def create_db_and_tables():
-    from models import Item  # noqa: F401 – ensure model is registered
+    from models import Item, Supplier  # noqa: F401 – ensure models are registered
 
     SQLModel.metadata.create_all(engine)
 
