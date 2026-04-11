@@ -1,8 +1,12 @@
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from sqlmodel import Session
 
+from agent import get_agent_response, initialize_agent, shutdown_agent
 from database import create_db_and_tables, get_session
 from models import Item, ItemCreate, ItemUpdate, Supplier, SupplierCreate, SupplierUpdate
 from services import (
@@ -20,13 +24,41 @@ from services import (
 )
 
 
+class ChatRequest(BaseModel):
+    message: str
+    thread_id: str = "default"
+
+
+class ChatResponse(BaseModel):
+    response: str
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    await initialize_agent()
     yield
+    await shutdown_agent()
 
 
 app = FastAPI(title="MCP-IS-PROJECT", version="0.1.0", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/ui")
+async def serve_ui():
+    return FileResponse("static/chat.html")
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    import traceback
+    try:
+        response = await get_agent_response(request.message, request.thread_id)
+        return ChatResponse(response=response)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/")

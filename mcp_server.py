@@ -31,68 +31,112 @@ def hello(name: str = "World") -> str:
 
 
 @mcp.tool()
-def add_item(name: str, price: float, description: str = "", quantity: int = 0, supplier_id: int | None = None) -> str:
-    """Create a new item. The supplier_id is the numeric ID of an existing supplier. If the user provides a supplier name instead of an ID, use the list_all_suppliers tool first to find the correct ID."""
+def add_item(name: str, price: float, description: str = "", quantity: int = 0, supplier_id: int | None = None, supplier_name: str | None = None) -> str:
+    """Create a new item. If you know the supplier name (e.g. 'Worten'), pass it as supplier_name and the ID is looked up automatically. Only use supplier_id if you already know the numeric ID."""
     with Session(engine) as session:
+        if supplier_name and not supplier_id:
+            all_suppliers = get_suppliers(session, offset=0, limit=1000)
+            match = next((s for s in all_suppliers if s.name.lower() == supplier_name.lower()), None)
+            if match:
+                supplier_id = match.id
+            else:
+                names = [s.name for s in all_suppliers]
+                return f"ERROR: Supplier '{supplier_name}' not found. Available: {names}"
         item = create_item(
             session, ItemCreate(name=name, price=price, description=description, quantity=quantity, supplier_id=supplier_id)
         )
-        return f"Created item {item.id}: {item.name}"
+        return f"Item '{item.name}' created successfully."
 
 
 @mcp.tool()
-def list_all_items(offset: int = 0, limit: int = 100) -> str:
-    """List all items."""
+def list_all_items() -> str:
+    """List all items in the inventory."""
     with Session(engine) as session:
-        items = get_items(session, offset=offset, limit=limit)
+        items = get_items(session, offset=0, limit=1000)
         if not items:
             return "No items found."
-        lines = [f"- [{i.id}] {i.name}: {i.description} | €{i.price} (qty: {i.quantity})" for i in items]
+        lines = []
+        for i in items:
+            desc = f" — {i.description}" if i.description else ""
+            supplier = get_supplier(session, i.supplier_id) if i.supplier_id else None
+            supplier_info = f" | Supplier: {supplier.name}" if supplier else ""
+            lines.append(f"- {i.name}{desc} | €{i.price} (qty: {i.quantity}){supplier_info}")
         return "\n".join(lines)
 
 
 @mcp.tool()
-def read_item(item_id: int) -> str:
-    """Get details of an item by ID."""
+def read_item(item_id: int | None = None, item_name: str | None = None) -> str:
+    """Get details of an item by ID or by name."""
     with Session(engine) as session:
+        if item_name and not item_id:
+            all_items = get_items(session, offset=0, limit=1000)
+            match = next((i for i in all_items if i.name.lower() == item_name.lower()), None)
+            if match is None:
+                return f"Item '{item_name}' not found."
+            item_id = match.id
+        if item_id is None:
+            return "ERROR: Provide item_id or item_name."
         item = get_item(session, item_id)
         if item is None:
-            return f"Item {item_id} not found."
-        return f"[{item.id}] {item.name}: {item.description} | €{item.price} (qty: {item.quantity})"
+            return f"Item not found."
+        supplier = get_supplier(session, item.supplier_id) if item.supplier_id else None
+        supplier_info = f" | Supplier: {supplier.name}" if supplier else ""
+        return f"{item.name}: {item.description} | €{item.price} (qty: {item.quantity}){supplier_info}"
 
 
 @mcp.tool()
 def modify_item(
-    item_id: int,
+    item_id: int | None = None,
+    item_name: str | None = None,
     name: str | None = None,
     price: float | None = None,
     description: str | None = None,
     quantity: int | None = None,
-    supplier_id: int | None = None,
+    supplier_name: str | None = None,
 ) -> str:
-    """Update an existing item. The supplier_id is the numeric ID of an existing supplier. If the user provides a supplier name instead of an ID, use the list_all_suppliers tool first to find the correct ID."""
+    """Update an existing item by item_id or item_name. Pass item_name if you only know the name. Use supplier_name to change the supplier by name."""
     kwargs = {}
     if name is not None: kwargs["name"] = name
     if price is not None: kwargs["price"] = price
     if description is not None: kwargs["description"] = description
     if quantity is not None: kwargs["quantity"] = quantity
-    if supplier_id is not None: kwargs["supplier_id"] = supplier_id
     with Session(engine) as session:
-        updated = update_item(
-            session, item_id, ItemUpdate.model_validate(kwargs)
-        )
+        if supplier_name:
+            all_suppliers = get_suppliers(session, offset=0, limit=1000)
+            match = next((s for s in all_suppliers if s.name.lower() == supplier_name.lower()), None)
+            if match:
+                kwargs["supplier_id"] = match.id
+            else:
+                return f"ERROR: Supplier '{supplier_name}' not found."
+        if item_name and not item_id:
+            all_items = get_items(session, offset=0, limit=1000)
+            match = next((i for i in all_items if i.name.lower() == item_name.lower()), None)
+            if match is None:
+                return f"ERROR: Item '{item_name}' not found."
+            item_id = match.id
+        if item_id is None:
+            return "ERROR: Provide item_id or item_name."
+        updated = update_item(session, item_id, ItemUpdate.model_validate(kwargs))
         if updated is None:
-            return f"Item {item_id} not found."
-        return f"Updated item {updated.id}: {updated.name}"
+            return "Item not found."
+        return f"Item '{updated.name}' updated successfully."
 
 
 @mcp.tool()
-def remove_item(item_id: int) -> str:
-    """Delete an item by ID."""
+def remove_item(item_id: int | None = None, item_name: str | None = None) -> str:
+    """Delete an item by ID or by name. Pass item_name if you only know the name."""
     with Session(engine) as session:
+        if item_name and not item_id:
+            all_items = get_items(session, offset=0, limit=1000)
+            match = next((i for i in all_items if i.name.lower() == item_name.lower()), None)
+            if match is None:
+                return f"ERROR: Item '{item_name}' not found."
+            item_id = match.id
+        if item_id is None:
+            return "ERROR: Provide item_id or item_name."
         if delete_item(session, item_id):
-            return f"Item {item_id} deleted."
-        return f"Item {item_id} not found."
+            return f"Item deleted successfully."
+        return f"Item not found."
 
 
 # ── Special tools ────────────────────────────────────────────────────
@@ -133,17 +177,17 @@ def add_supplier(name: str, contact: str = "", email: str = "") -> str:
         supplier = create_supplier(
             session, SupplierCreate(name=name, contact=contact, email=email)
         )
-        return f"Created supplier {supplier.id}: {supplier.name}"
+        return f"Supplier '{supplier.name}' created successfully."
 
 
 @mcp.tool()
-def list_all_suppliers(offset: int = 0, limit: int = 100) -> str:
+def list_all_suppliers() -> str:
     """List all suppliers."""
     with Session(engine) as session:
-        suppliers = get_suppliers(session, offset=offset, limit=limit)
+        suppliers = get_suppliers(session, offset=0, limit=1000)
         if not suppliers:
             return "No suppliers found."
-        lines = [f"- [{s.id}] {s.name} | Contact: {s.contact} | Email: {s.email}" for s in suppliers]
+        lines = [f"- {s.name} | Contact: {s.contact} | Email: {s.email}" for s in suppliers]
         return "\n".join(lines)
 
 
@@ -154,34 +198,49 @@ def read_supplier_tool(supplier_id: int) -> str:
         supplier = get_supplier(session, supplier_id)
         if supplier is None:
             return f"Supplier {supplier_id} not found."
-        return f"[{supplier.id}] {supplier.name} | Contact: {supplier.contact} | Email: {supplier.email}"
+        return f"{supplier.name} | Contact: {supplier.contact} | Email: {supplier.email}"
 
 
 @mcp.tool()
 def modify_supplier(
-    supplier_id: int,
+    supplier_id: int | None = None,
+    supplier_name: str | None = None,
     name: str | None = None,
     contact: str | None = None,
     email: str | None = None,
 ) -> str:
-    """Update an existing supplier."""
+    """Update an existing supplier by supplier_id or supplier_name."""
     kwargs = {}
     if name is not None: kwargs["name"] = name
     if contact is not None: kwargs["contact"] = contact
     if email is not None: kwargs["email"] = email
     with Session(engine) as session:
-        updated = update_supplier(
-            session, supplier_id, SupplierUpdate.model_validate(kwargs)
-        )
+        if supplier_name and not supplier_id:
+            all_suppliers = get_suppliers(session, offset=0, limit=1000)
+            match = next((s for s in all_suppliers if s.name.lower() == supplier_name.lower()), None)
+            if match is None:
+                return f"ERROR: Supplier '{supplier_name}' not found."
+            supplier_id = match.id
+        if supplier_id is None:
+            return "ERROR: Provide supplier_id or supplier_name."
+        updated = update_supplier(session, supplier_id, SupplierUpdate.model_validate(kwargs))
         if updated is None:
-            return f"Supplier {supplier_id} not found."
-        return f"Updated supplier {updated.id}: {updated.name}"
+            return "Supplier not found."
+        return f"Supplier '{updated.name}' updated successfully."
 
 
 @mcp.tool()
-def remove_supplier(supplier_id: int) -> str:
-    """Delete a supplier by ID. Returns an error if the supplier still has items linked."""
+def remove_supplier(supplier_id: int | None = None, supplier_name: str | None = None) -> str:
+    """Delete a supplier by ID or name. IMPORTANT: If the supplier still has items linked, return the error message to the user and STOP — do NOT delete the items first or take any other action."""
     with Session(engine) as session:
+        if supplier_name and not supplier_id:
+            all_suppliers = get_suppliers(session, offset=0, limit=1000)
+            match = next((s for s in all_suppliers if s.name.lower() == supplier_name.lower()), None)
+            if match is None:
+                return f"ERROR: Supplier '{supplier_name}' not found."
+            supplier_id = match.id
+        if supplier_id is None:
+            return "ERROR: Provide supplier_id or supplier_name."
         supplier = get_supplier(session, supplier_id)
         if supplier is None:
             return "ERROR: Supplier not found."
@@ -194,23 +253,36 @@ def remove_supplier(supplier_id: int) -> str:
                 f"Remove or reassign these items first."
             )
         delete_supplier(session, supplier_id)
-        return f"Supplier '{supplier.name}' (ID: {supplier_id}) deleted successfully."
+        return f"Supplier '{supplier.name}' deleted successfully."
 
 
 @mcp.tool()
 def add_item_text(name: str, price: str, description: str = "", quantity: str = "0", supplier_id: str = "") -> str:
-    """Create a new item using text-only inputs. All parameters are strings. Price should be a numeric string like '999.99'. Quantity should be an integer string like '10'. Supplier_id should be a numeric string or empty. This is an alternative to add_item that accepts all values as text."""
+    """Create a new item using text-only inputs. All parameters are strings. Price should be a numeric string like '999.99'. Quantity should be an integer string like '10'. supplier_id can be a numeric ID string OR a supplier name like 'Fnac' — the system will look it up automatically."""
     parsed_price = float(price)
-    parsed_qty = int(quantity)
-    parsed_supplier = int(supplier_id) if supplier_id else None
+    parsed_qty = int(quantity) if quantity else 0
+    parsed_supplier = None
     with Session(engine) as session:
+        if supplier_id:
+            try:
+                parsed_supplier = int(supplier_id)
+            except ValueError:
+                all_suppliers = get_suppliers(session, offset=0, limit=1000)
+                match = next((s for s in all_suppliers if s.name.lower() == supplier_id.lower()), None)
+                if match:
+                    parsed_supplier = match.id
+                else:
+                    names = [s.name for s in all_suppliers]
+                    return f"ERROR: Supplier '{supplier_id}' not found. Available: {names}"
         item = create_item(
             session, ItemCreate(name=name, price=parsed_price, description=description, quantity=parsed_qty, supplier_id=parsed_supplier)
         )
+        supplier = get_supplier(session, item.supplier_id) if item.supplier_id else None
+        supplier_info = supplier.name if supplier else "none"
         return (
-            f"Created item {item.id}: {item.name} | "
+            f"Item '{item.name}' created successfully | "
             f"Price: €{item.price:.2f} | Qty: {item.quantity} | "
-            f"Supplier ID: {item.supplier_id or 'none'}"
+            f"Supplier: {supplier_info}"
         )
 
 
