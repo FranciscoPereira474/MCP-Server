@@ -86,37 +86,45 @@ def read_item(item_id: int | None = None, item_name: str | None = None) -> str:
 
 @mcp.tool()
 def modify_item(
-    item_id: int | None = None,
-    item_name: str | None = None,
-    name: str | None = None,
-    price: float | None = None,
-    description: str | None = None,
-    quantity: int | None = None,
-    supplier_name: str | None = None,
+    item_id: str = "",
+    item_name: str = "",
+    name: str = "",
+    price: str = "",
+    description: str = "",
+    quantity: str = "",
+    supplier_name: str = "",
 ) -> str:
-    """Update an existing item by item_id or item_name. Pass item_name if you only know the name. Use supplier_name to change the supplier by name."""
+    """Update an existing item by item_id or item_name. Pass item_name if you only know the name. Only pass the fields you want to change — leave others empty."""
     kwargs = {}
-    if name is not None: kwargs["name"] = name
-    if price is not None: kwargs["price"] = price
-    if description is not None: kwargs["description"] = description
-    if quantity is not None: kwargs["quantity"] = quantity
+    if name.strip(): kwargs["name"] = name.strip()
+    if price.strip():
+        try: kwargs["price"] = float(price)
+        except ValueError: return f"ERROR: Invalid price '{price}'."
+    if description.strip(): kwargs["description"] = description.strip()
+    if quantity.strip():
+        try: kwargs["quantity"] = int(quantity)
+        except ValueError: return f"ERROR: Invalid quantity '{quantity}'."
+    parsed_item_id = None
+    if item_id.strip():
+        try: parsed_item_id = int(item_id)
+        except ValueError: pass
     with Session(engine) as session:
-        if supplier_name:
+        if supplier_name.strip():
             all_suppliers = get_suppliers(session, offset=0, limit=1000)
-            match = next((s for s in all_suppliers if s.name.lower() == supplier_name.lower()), None)
+            match = next((s for s in all_suppliers if s.name.lower() == supplier_name.strip().lower()), None)
             if match:
                 kwargs["supplier_id"] = match.id
             else:
                 return f"ERROR: Supplier '{supplier_name}' not found."
-        if item_name and not item_id:
+        if item_name.strip() and not parsed_item_id:
             all_items = get_items(session, offset=0, limit=1000)
-            match = next((i for i in all_items if i.name.lower() == item_name.lower()), None)
+            match = next((i for i in all_items if i.name.lower() == item_name.strip().lower()), None)
             if match is None:
                 return f"ERROR: Item '{item_name}' not found."
-            item_id = match.id
-        if item_id is None:
+            parsed_item_id = match.id
+        if parsed_item_id is None:
             return "ERROR: Provide item_id or item_name."
-        updated = update_item(session, item_id, ItemUpdate.model_validate(kwargs))
+        updated = update_item(session, parsed_item_id, ItemUpdate.model_validate(kwargs))
         if updated is None:
             return "Item not found."
         return f"Item '{updated.name}' updated successfully."
@@ -143,17 +151,26 @@ def remove_item(item_id: int | None = None, item_name: str | None = None) -> str
 
 
 @mcp.tool()
-def transfer_stock(from_item_id: int, to_item_id: int, quantity: int) -> str:
-    """Transfer stock quantity from one item to another. Both items must exist. The quantity must be positive and the source item must have enough stock available. Raises an exception if stock is insufficient."""
+def transfer_stock(quantity: int, from_item_name: str | None = None, to_item_name: str | None = None, from_item_id: int | None = None, to_item_id: int | None = None) -> str:
+    """Transfer stock quantity from one item to another. Use from_item_name and to_item_name (e.g. 'Mesa2', 'Mesa'). Raises an exception if stock is insufficient."""
     if quantity <= 0:
         raise ValueError("Quantity must be a positive integer.")
     with Session(engine) as session:
+        all_items = get_items(session, offset=0, limit=1000)
+        if from_item_name and not from_item_id:
+            match = next((i for i in all_items if i.name.lower() == from_item_name.lower()), None)
+            if match is None:
+                raise ValueError(f"Source item '{from_item_name}' not found.")
+            from_item_id = match.id
+        if to_item_name and not to_item_id:
+            match = next((i for i in all_items if i.name.lower() == to_item_name.lower()), None)
+            if match is None:
+                raise ValueError(f"Destination item '{to_item_name}' not found.")
+            to_item_id = match.id
+        if from_item_id is None or to_item_id is None:
+            raise ValueError("Provide from_item_name and to_item_name.")
         from_item = get_item(session, from_item_id)
-        if from_item is None:
-            raise ValueError(f"Source item {from_item_id} not found.")
         to_item = get_item(session, to_item_id)
-        if to_item is None:
-            raise ValueError(f"Destination item {to_item_id} not found.")
         if from_item.quantity < quantity:
             raise ValueError(
                 f"Insufficient stock: '{from_item.name}' only has {from_item.quantity} units, "
@@ -161,10 +178,7 @@ def transfer_stock(from_item_id: int, to_item_id: int, quantity: int) -> str:
             )
         update_item(session, from_item_id, ItemUpdate.model_validate({"quantity": from_item.quantity - quantity}))
         update_item(session, to_item_id, ItemUpdate.model_validate({"quantity": to_item.quantity + quantity}))
-        return (
-            f"Transferred {quantity} units from '{from_item.name}' to '{to_item.name}'. "
-            f"New stock: {from_item.name}={from_item.quantity - quantity}, {to_item.name}={to_item.quantity + quantity}"
-        )
+        return f"Successfully transferred {quantity} units from '{from_item.name}' to '{to_item.name}'."
 
 
 # ── Supplier tools ───────────────────────────────────────────────────

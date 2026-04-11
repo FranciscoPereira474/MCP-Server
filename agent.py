@@ -1,6 +1,7 @@
 """LangChain agent that connects to the MCP server and uses Ollama as LLM."""
 
 import logging
+import re
 from pathlib import Path
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -42,7 +43,11 @@ async def initialize_agent() -> None:
         "- When deleting a supplier, call remove_supplier ONCE and report the result to the user. "
         "If it returns an error because items are linked, tell the user and STOP — do NOT delete the items.\n"
         "- When the user mentions a supplier by name, use the supplier_name parameter in add_item instead of looking up the ID manually.\n"
-        "- Always confirm actions before reporting success."
+        "- Always confirm actions before reporting success.\n"
+        "- When a tool returns an error or raises an exception, show ONLY the error message content to the user — "
+        "do NOT include 'Error executing tool X:' or any technical prefix. "
+        "For example, if a tool fails with 'Insufficient stock: Mesa2 only has 3 units', "
+        "show exactly that message and nothing else."
     )
     _agent = create_react_agent(_llm, tools, checkpointer=_memory, prompt=system_prompt)
     logger.info("LangChain agent ready.")
@@ -60,6 +65,11 @@ def _clear_thread(thread_id: str) -> None:
         del _memory.storage[k]
 
 
+def _strip_tool_prefix(text: str) -> str:
+    """Remove 'Error executing tool X: ' prefix added by the MCP framework."""
+    return re.sub(r"Error executing tool \w+:\s*", "", text).strip()
+
+
 async def get_agent_response(message: str, thread_id: str = "default") -> str:
     """Send a message to the agent and return its text response.
 
@@ -73,7 +83,7 @@ async def get_agent_response(message: str, thread_id: str = "default") -> str:
             {"messages": [{"role": "user", "content": message}]},
             config,
         )
-        return result["messages"][-1].content
+        return _strip_tool_prefix(result["messages"][-1].content)
     except Exception as e:
         if "INVALID_CHAT_HISTORY" in str(e) or "ToolMessage" in str(e):
             logger.warning("Corrupted chat history detected — resetting thread and retrying.")
@@ -82,5 +92,5 @@ async def get_agent_response(message: str, thread_id: str = "default") -> str:
                 {"messages": [{"role": "user", "content": message}]},
                 config,
             )
-            return result["messages"][-1].content
+            return _strip_tool_prefix(result["messages"][-1].content)
         raise
